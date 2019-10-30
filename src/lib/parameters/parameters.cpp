@@ -50,14 +50,15 @@
 #include <math.h>
 
 #include <drivers/drv_hrt.h>
+#include <lib/perf/perf_counter.h>
 #include <px4_config.h>
 #include <px4_defines.h>
 #include <px4_posix.h>
 #include <px4_sem.h>
 #include <px4_shutdown.h>
-
-#include <perf/perf_counter.h>
 #include <systemlib/uthash/utarray.h>
+
+using namespace time_literals;
 
 //#define PARAM_NO_ORB ///< if defined, avoid uorb dependency. This disables publication of parameter_update on param change
 //#define PARAM_NO_AUTOSAVE ///< if defined, do not autosave (avoids LP work queue dependency)
@@ -65,6 +66,8 @@
 #if !defined(PARAM_NO_ORB)
 # include "uORB/uORB.h"
 # include "uORB/topics/parameter_update.h"
+# include <uORB/topics/actuator_armed.h>
+# include <uORB/Subscription.hpp>
 #endif
 
 #if defined(FLASH_BASED_PARAMS)
@@ -91,8 +94,8 @@ static char *param_user_file = nullptr;
 #include <px4_workqueue.h>
 /* autosaving variables */
 static hrt_abstime last_autosave_timestamp = 0;
-static struct work_s autosave_work;
-static bool autosave_scheduled = false;
+static struct work_s autosave_work {};
+static volatile bool autosave_scheduled = false;
 static bool autosave_disabled = false;
 #endif /* PARAM_NO_AUTOSAVE */
 
@@ -498,7 +501,7 @@ param_value_is_default(param_t param)
 	param_lock_reader();
 	s = param_find_changed(param);
 	param_unlock_reader();
-	return s ? false : true;
+	return s == nullptr;
 }
 
 bool
@@ -613,6 +616,21 @@ autosave_worker(void *arg)
 {
 	bool disabled = false;
 
+#if !defined(PARAM_NO_ORB)
+
+	if (!param_get_default_file()) {
+		// In case we save to FLASH, defer param writes until disarmed,
+		// as writing to FLASH can stall the entire CPU (in rare cases around 300ms on STM32F7)
+		uORB::SubscriptionData<actuator_armed_s> armed_sub{ORB_ID(actuator_armed)};
+
+		if (armed_sub.get().armed) {
+			work_queue(LPWORK, &autosave_work, (worker_t)&autosave_worker, nullptr, USEC2TICK(1_s));
+			return;
+		}
+	}
+
+#endif
+
 	param_lock_writer();
 	last_autosave_timestamp = hrt_absolute_time();
 	autosave_scheduled = false;
@@ -627,7 +645,7 @@ autosave_worker(void *arg)
 	int ret = param_save_default();
 
 	if (ret != 0) {
-		PX4_ERR("param save failed (%i)", ret);
+		PX4_ERR("param auto save failed (%i)", ret);
 	}
 }
 #endif /* PARAM_NO_AUTOSAVE */
@@ -651,10 +669,10 @@ param_autosave()
 	// - tasks often call param_set() for multiple params, so this avoids unnecessary save calls
 	// - the logger stores changed params. He gets notified on a param change via uORB and then
 	//   looks at all unsaved params.
-	hrt_abstime delay = 300 * 1000;
+	hrt_abstime delay = 300_ms;
 
-	const hrt_abstime rate_limit = 2000 * 1000; // rate-limit saving to 2 seconds
-	hrt_abstime last_save_elapsed = hrt_elapsed_time(&last_autosave_timestamp);
+	static constexpr const hrt_abstime rate_limit = 2_s; // rate-limit saving to 2 seconds
+	const hrt_abstime last_save_elapsed = hrt_elapsed_time(&last_autosave_timestamp);
 
 	if (last_save_elapsed < rate_limit && rate_limit > last_save_elapsed + delay) {
 		delay = rate_limit - last_save_elapsed;
@@ -960,9 +978,11 @@ param_save_default()
 	const char *filename = param_get_default_file();
 
 	if (!filename) {
+		perf_begin(param_export_perf);
 		param_lock_writer();
 		res = flash_param_save(false);
 		param_unlock_writer();
+		perf_end(param_export_perf);
 		return res;
 	}
 
@@ -1370,4 +1390,37 @@ uint32_t param_hash_check()
 	param_unlock_reader();
 
 	return param_hash;
+}
+
+void param_print_status()
+{
+	PX4_INFO("summary: %d/%d (used/total)", param_count_used(), param_count());
+
+#ifndef FLASH_BASED_PARAMS
+	const char *filename = param_get_default_file();
+
+	if (filename != nullptr) {
+		PX4_INFO("file: %s", param_get_default_file());
+	}
+
+#endif /* FLASH_BASED_PARAMS */
+
+	if (param_values != nullptr) {
+		PX4_INFO("storage array: %d/%d elements (%zu bytes total)",
+			 utarray_len(param_values), param_values->n, param_values->n * sizeof(UT_icd));
+	}
+
+#ifndef PARAM_NO_AUTOSAVE
+	PX4_INFO("auto save: %s", autosave_disabled ? "off" : "on");
+
+	if (!autosave_disabled && (last_autosave_timestamp > 0)) {
+		PX4_INFO("last auto save: %.3f seconds ago", hrt_elapsed_time(&last_autosave_timestamp) * 1e-6);
+	}
+
+#endif /* PARAM_NO_AUTOSAVE */
+
+	perf_print_counter(param_export_perf);
+	perf_print_counter(param_find_perf);
+	perf_print_counter(param_get_perf);
+	perf_print_counter(param_set_perf);
 }

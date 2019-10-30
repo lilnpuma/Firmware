@@ -87,11 +87,11 @@ class GPSSIM : public VirtDevObj
 public:
 	GPSSIM(bool fake_gps, bool enable_sat_info,
 	       int fix_type, int num_sat, int noise_multiplier);
-	virtual ~GPSSIM();
+	~GPSSIM() override;
 
-	virtual int			init();
+	int		init() override;
 
-	virtual int			devIOCTL(unsigned long cmd, unsigned long arg);
+	int		devIOCTL(unsigned long cmd, unsigned long arg) override;
 
 	void set(int fix_type, int num_sat, int noise_multiplier);
 
@@ -101,7 +101,7 @@ public:
 	void				print_info();
 
 protected:
-	virtual void			_measure() {}
+	void		_measure() override {}
 
 private:
 
@@ -268,11 +268,11 @@ GPSSIM::receive(int timeout)
 {
 	Simulator *sim = Simulator::getInstance();
 	simulator::RawGPSData gps;
-	sim->getGPSSample((uint8_t *)&gps, sizeof(gps));
 
 	static uint64_t timestamp_last = 0;
 
-	if (gps.timestamp != timestamp_last) {
+	if (sim->getGPSSample((uint8_t *)&gps, sizeof(gps)) &&
+	    (gps.timestamp != timestamp_last || timestamp_last == 0)) {
 		_report_gps_pos.timestamp = hrt_absolute_time();
 		_report_gps_pos.lat = gps.lat;
 		_report_gps_pos.lon = gps.lon;
@@ -286,6 +286,7 @@ GPSSIM::receive(int timeout)
 		_report_gps_pos.cog_rad = (float)(gps.cog) * 3.1415f / (100.0f * 180.0f);
 		_report_gps_pos.fix_type = gps.fix_type;
 		_report_gps_pos.satellites_used = gps.satellites_visible;
+		_report_gps_pos.s_variance_m_s = 0.25f;
 
 		timestamp_last = gps.timestamp;
 

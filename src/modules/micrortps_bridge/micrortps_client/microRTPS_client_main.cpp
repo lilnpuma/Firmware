@@ -33,7 +33,7 @@
 #include "microRTPS_transport.h"
 #include "microRTPS_client.h"
 
-#include <cinttypes>
+#include <inttypes.h>
 #include <cstdio>
 #include <cstdlib>
 #include <ctime>
@@ -76,7 +76,7 @@ static void usage(const char *name)
 	PRINT_MODULE_USAGE_PARAM_STRING('t', "UART", "UART|UDP", "Transport protocol", true);
 	PRINT_MODULE_USAGE_PARAM_STRING('d', "/dev/ttyACM0", "<file:dev>", "Select Serial Device", true);
 	PRINT_MODULE_USAGE_PARAM_INT('b', 460800, 9600, 3000000, "Baudrate (can also be p:<param_name>)", true);
-	PRINT_MODULE_USAGE_PARAM_INT('p', 1, 1, 1000, "Poll timeout for UART in ms", true);
+	PRINT_MODULE_USAGE_PARAM_INT('p', -1, 1, 1000, "Poll timeout for UART in ms", true);
 	PRINT_MODULE_USAGE_PARAM_INT('u', 0, 0, 10000,
 				     "Interval in ms to limit the update rate of all sent topics (0=unlimited)", true);
 	PRINT_MODULE_USAGE_PARAM_INT('l', 10000, -1, 100000, "Limit number of iterations until the program exits (-1=infinite)",
@@ -84,6 +84,7 @@ static void usage(const char *name)
 	PRINT_MODULE_USAGE_PARAM_INT('w', 1, 1, 1000, "Time in ms for which each iteration sleeps", true);
 	PRINT_MODULE_USAGE_PARAM_INT('r', 2019, 0, 65536, "Select UDP Network Port for receiving (local)", true);
 	PRINT_MODULE_USAGE_PARAM_INT('s', 2020, 0, 65536, "Select UDP Network Port for sending (remote)", true);
+	PRINT_MODULE_USAGE_PARAM_STRING('i', "127.0.0.1", "<x.x.x.x>", "Select IP address (remote)", true);
 
 	PRINT_MODULE_USAGE_COMMAND("stop");
 	PRINT_MODULE_USAGE_COMMAND("status");
@@ -108,7 +109,7 @@ static int parse_options(int argc, char *argv[])
 	int myoptind = 1;
 	const char *myoptarg = nullptr;
 
-	while ((ch = px4_getopt(argc, argv, "t:d:u:l:w:b:p:r:s:", &myoptind, &myoptarg)) != EOF) {
+	while ((ch = px4_getopt(argc, argv, "t:d:u:l:w:b:p:r:s:i:", &myoptind, &myoptarg)) != EOF) {
 		switch (ch) {
 		case 't': _options.transport      = strcmp(myoptarg, "UDP") == 0 ?
 							    options::eTransports::UDP
@@ -129,6 +130,8 @@ static int parse_options(int argc, char *argv[])
 		case 'r': _options.recv_port      = strtoul(myoptarg, nullptr, 10);     break;
 
 		case 's': _options.send_port      = strtoul(myoptarg, nullptr, 10);     break;
+
+		case 'i': if (nullptr != myoptarg) strcpy(_options.ip, myoptarg); break;
 
 		default:
 			usage(argv[1]);
@@ -166,9 +169,9 @@ static int micrortps_start(int argc, char *argv[])
 		break;
 
 	case options::eTransports::UDP: {
-			transport_node = new UDP_node(_options.recv_port, _options.send_port);
-			PX4_INFO("UDP transport: recv port: %u; send port: %u; sleep: %dms",
-				 _options.recv_port, _options.send_port, _options.sleep_ms);
+			transport_node = new UDP_node(_options.ip, _options.recv_port, _options.send_port);
+			PX4_INFO("UDP transport: ip address: %s; recv port: %u; send port: %u; sleep: %dms",
+				 _options.ip, _options.recv_port, _options.send_port, _options.sleep_ms);
 		}
 		break;
 

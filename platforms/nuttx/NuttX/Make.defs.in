@@ -89,7 +89,7 @@ ifeq ($(CONFIG_ARMV7M_STACKCHECK),y)
 endif
 
 CFLAGS = $(ARCHINCLUDES) \
-	-std=gnu99 \
+	-std=gnu11 \
 	${CMAKE_C_FLAGS} \
 	$(FLAGS) \
 	-Wno-bad-function-cast \
@@ -108,12 +108,14 @@ CFLAGS = $(ARCHINCLUDES) \
 
 CXXFLAGS = $(ARCHXXINCLUDES) \
 	-std=gnu++11 \
+	-nostdinc++ \
 	${CMAKE_CXX_FLAGS} \
 	$(FLAGS) \
 	-fcheck-new \
 	-fno-builtin \
 	-fno-exceptions \
 	-fno-rtti \
+	-nostdinc++ \
 	-Wno-double-promotion \
 	-Wno-missing-declarations
 

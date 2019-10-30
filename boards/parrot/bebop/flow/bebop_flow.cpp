@@ -38,7 +38,9 @@
  * an optical flow computation.
  */
 
+#include <stdlib.h>
 #include <stdint.h>
+#include <string.h>
 
 #include <px4_tasks.h>
 #include <px4_getopt.h>
@@ -75,8 +77,7 @@ void task_main(int argc, char *argv[])
 {
 	_is_running = true;
 	int ret = 0;
-	struct frame_data frame;
-	memset(&frame, 0, sizeof(frame));
+	struct frame_data frame {};
 	uint32_t timeout_cnt = 0;
 
 	// Main loop

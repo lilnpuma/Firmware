@@ -64,7 +64,13 @@ public:
 	 * @param name		Driver name
 	 * @param devname	Device node name
 	 */
-	CDev(const char *devname);
+	explicit CDev(const char *devname);
+
+	// no copy, assignment, move, move assignment
+	CDev(const CDev &) = delete;
+	CDev &operator=(const CDev &) = delete;
+	CDev(CDev &&) = delete;
+	CDev &operator=(CDev &&) = delete;
 
 	virtual ~CDev();
 
@@ -264,6 +270,17 @@ protected:
 
 	px4_sem_t	_lock; /**< lock to protect access to all class members (also for derived classes) */
 
+
+	/**
+	* First, unregisters the driver. Next, free the memory for the devname,
+	* in case it was expected to have ownership. Sets devname to nullptr.
+	*
+	* This is only needed if the ownership of the devname was passed to the CDev, otherwise ~CDev handles it.
+	*
+	* @return  PX4_OK on success, -ENODEV if the devname is already nullptr
+	*/
+	int unregister_driver_and_memory();
+
 private:
 	const char	*_devname{nullptr};		/**< device node name */
 
@@ -290,9 +307,6 @@ private:
 	 */
 	inline int	remove_poll_waiter(px4_pollfd_struct_t *fds);
 
-	/* do not allow copying this class */
-	CDev(const CDev &);
-	CDev operator=(const CDev &);
 };
 
 } // namespace cdev

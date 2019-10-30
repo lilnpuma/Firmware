@@ -55,7 +55,7 @@
 #include <drivers/device/device.h>
 #include <drivers/drv_hrt.h>
 #include <arch/board/board.h>
-#include <uORB/uORB.h>
+#include <uORB/Subscription.hpp>
 #include <uORB/topics/vehicle_command.h>
 #include <uORB/topics/actuator_controls.h>
 #include <uORB/topics/wind_estimate.h>
@@ -222,8 +222,6 @@ BottleDrop::~BottleDrop()
 int
 BottleDrop::start()
 {
-	ASSERT(_main_task == -1);
-
 	/* start the task */
 	_main_task = px4_task_spawn_cmd("bottle_drop",
 					SCHED_DEFAULT,
@@ -413,9 +411,7 @@ BottleDrop::task_main()
 
 	int vehicle_global_position_sub = orb_subscribe(ORB_ID(vehicle_global_position));
 
-	struct parameter_update_s update;
-	memset(&update, 0, sizeof(update));
-	int parameter_update_sub = orb_subscribe(ORB_ID(parameter_update));
+	uORB::Subscription parameter_update_sub{ORB_ID(parameter_update)};
 
 	struct mission_item_s flight_vector_s {};
 	struct mission_item_s flight_vector_e {};
@@ -494,12 +490,11 @@ BottleDrop::task_main()
 				orb_copy(ORB_ID(vehicle_global_position), vehicle_global_position_sub, &_global_pos);
 			}
 
-			// Get parameter updates
-			orb_check(parameter_update_sub, &updated);
-
-			if (updated) {
-				// copy global position
-				orb_copy(ORB_ID(parameter_update), parameter_update_sub, &update);
+			// check for parameter updates
+			if (parameter_update_sub.updated()) {
+				// clear update
+				parameter_update_s pupdate;
+				parameter_update_sub.copy(&pupdate);
 
 				// update all parameters
 				param_get(param_gproperties, &z_0);

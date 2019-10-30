@@ -1,6 +1,6 @@
 /****************************************************************************
  *
- *   Copyright (c) 2013, 2017 PX4 Development Team. All rights reserved.
+ *  Copyright (C) 2013-2019 PX4 Development Team. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -32,20 +32,20 @@
  ****************************************************************************/
 
 /**
- * @file test_mixer.hpp
- *
+ * @file test_mixer.cpp
  * Mixer load test
  */
 
-#include <limits>
 #include <dirent.h>
+#include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <math.h>
 
 #include <px4_config.h>
 #include <mixer/mixer.h>
 #include <mixer/mixer_load.h>
-#include <pwm_limit/pwm_limit.h>
+#include <output_limit/output_limit.h>
 #include <drivers/drv_hrt.h>
 #include <drivers/drv_pwm_output.h>
 #include <px4iofirmware/mixer.h>
@@ -349,9 +349,9 @@ bool MixerTest::load_mixer(const char *filename, const char *buf, unsigned loade
 bool MixerTest::mixerTest()
 {
 	/*
-	 * PWM limit structure
+	 * Output limit structure
 	 */
-	pwm_limit_t pwm_limit;
+	output_limit_t output_limit;
 	bool should_arm = false;
 	uint16_t r_page_servo_disarmed[output_max];
 	uint16_t r_page_servo_control_min[output_max];
@@ -372,7 +372,7 @@ bool MixerTest::mixerTest()
 	unsigned mixed;
 	const int jmax = 5;
 
-	pwm_limit_init(&pwm_limit);
+	output_limit_init(&output_limit);
 
 	/* run through arming phase */
 	for (unsigned i = 0; i < output_max; i++) {
@@ -388,8 +388,8 @@ bool MixerTest::mixerTest()
 	should_prearm = true;
 	mixed = mixer_group.mix(&outputs[0], output_max);
 
-	pwm_limit_calc(should_arm, should_prearm, mixed, reverse_pwm_mask, r_page_servo_disarmed, r_page_servo_control_min,
-		       r_page_servo_control_max, outputs, r_page_servos, &pwm_limit);
+	output_limit_calc(should_arm, should_prearm, mixed, reverse_pwm_mask, r_page_servo_disarmed, r_page_servo_control_min,
+			  r_page_servo_control_max, outputs, r_page_servos, &output_limit);
 
 	//warnx("mixed %d outputs (max %d), values:", mixed, output_max);
 	for (unsigned i = 0; i < mixed; i++) {
@@ -398,13 +398,13 @@ bool MixerTest::mixerTest()
 
 		if (i != actuator_controls_s::INDEX_THROTTLE) {
 			if (r_page_servos[i] < r_page_servo_control_min[i]) {
-				warnx("active servo < min");
+				PX4_ERR("active servo < min");
 				return false;
 			}
 
 		} else {
 			if (r_page_servos[i] != r_page_servo_disarmed[i]) {
-				warnx("throttle output != 0 (this check assumed the IO pass mixer!)");
+				PX4_ERR("throttle output != 0 (this check assumed the IO pass mixer!)");
 				return false;
 			}
 		}
@@ -429,8 +429,8 @@ bool MixerTest::mixerTest()
 		/* mix */
 		mixed = mixer_group.mix(&outputs[0], output_max);
 
-		pwm_limit_calc(should_arm, should_prearm, mixed, reverse_pwm_mask, r_page_servo_disarmed, r_page_servo_control_min,
-			       r_page_servo_control_max, outputs, r_page_servos, &pwm_limit);
+		output_limit_calc(should_arm, should_prearm, mixed, reverse_pwm_mask, r_page_servo_disarmed, r_page_servo_control_min,
+				  r_page_servo_control_max, outputs, r_page_servos, &output_limit);
 
 		//warnx("mixed %d outputs (max %d), values:", mixed, output_max);
 		for (unsigned i = 0; i < mixed; i++) {
@@ -473,8 +473,8 @@ bool MixerTest::mixerTest()
 		/* mix */
 		mixed = mixer_group.mix(&outputs[0], output_max);
 
-		pwm_limit_calc(should_arm, should_prearm, mixed, reverse_pwm_mask, r_page_servo_disarmed, r_page_servo_control_min,
-			       r_page_servo_control_max, outputs, r_page_servos, &pwm_limit);
+		output_limit_calc(should_arm, should_prearm, mixed, reverse_pwm_mask, r_page_servo_disarmed, r_page_servo_control_min,
+				  r_page_servo_control_max, outputs, r_page_servos, &output_limit);
 
 		//fprintf(stderr, "mixed %d outputs (max %d)", mixed, output_max);
 
@@ -501,8 +501,8 @@ bool MixerTest::mixerTest()
 		/* mix */
 		mixed = mixer_group.mix(&outputs[0], output_max);
 
-		pwm_limit_calc(should_arm, should_prearm, mixed, reverse_pwm_mask, r_page_servo_disarmed, r_page_servo_control_min,
-			       r_page_servo_control_max, outputs, r_page_servos, &pwm_limit);
+		output_limit_calc(should_arm, should_prearm, mixed, reverse_pwm_mask, r_page_servo_disarmed, r_page_servo_control_min,
+				  r_page_servo_control_max, outputs, r_page_servos, &output_limit);
 
 		//warnx("mixed %d outputs (max %d), values:", mixed, output_max);
 		for (unsigned i = 0; i < mixed; i++) {
@@ -538,8 +538,8 @@ bool MixerTest::mixerTest()
 		/* mix */
 		mixed = mixer_group.mix(&outputs[0], output_max);
 
-		pwm_limit_calc(should_arm, should_prearm, mixed, reverse_pwm_mask, r_page_servo_disarmed, r_page_servo_control_min,
-			       r_page_servo_control_max, outputs, r_page_servos, &pwm_limit);
+		output_limit_calc(should_arm, should_prearm, mixed, reverse_pwm_mask, r_page_servo_disarmed, r_page_servo_control_min,
+				  r_page_servo_control_max, outputs, r_page_servos, &output_limit);
 
 		//warnx("mixed %d outputs (max %d), values:", mixed, output_max);
 		for (unsigned i = 0; i < mixed; i++) {
@@ -595,7 +595,7 @@ mixer_callback(uintptr_t handle, uint8_t control_group, uint8_t control_index, f
 
 	if (should_prearm && control_group == actuator_controls_s::GROUP_INDEX_ATTITUDE &&
 	    control_index == actuator_controls_s::INDEX_THROTTLE) {
-		control = std::numeric_limits<float>::quiet_NaN();
+		control = NAN;
 	}
 
 	return 0;
